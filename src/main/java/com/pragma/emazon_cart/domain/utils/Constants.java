@@ -6,12 +6,18 @@ public class Constants {
         throw new IllegalStateException("Utility class");
     }
 
+    /* --- SECURITY EXCEPTIONS --- */
+
+    public static final String UNAUTHORIZED_ACCESS = "Unauthorized access: ";
+
     /* --- OPENAPI CONSTANTS --- */
 
     public static final String ADD_TO_CART = "Add item to cart";
     public static final String ITEM_ADDED = "Item added to cart";
     public static final String DELETE_FROM_CART = "Delete item from cart";
     public static final String ITEM_DELETED = "Item deleted from cart";
+    public static final String BUY_FROM_CART = "Buy item from cart";
+    public static final String ITEMS_PURCHASED = "Items purchased from cart";
 
     /* --- OPENAPI CONSTANTS --- */
 
@@ -30,7 +36,12 @@ public class Constants {
     public static final String CLAIM_AUTHORITIES = "authorities";
     public static final String INVALID_TOKEN = "Token invalid, not Authorized";
 
+    /* --- CART REQUEST CONSTANTS --- */
+
+    public static final String CART_URL = "/cart/";
+    public static final String CART_BUY_URL = "/cart/buy";
+
     /* --- ROLES --- */
 
-    public static final String ROLE_ADMIN = "ADMIN";
+    public static final String ROLE_CLIENT = "CLIENT";
 }

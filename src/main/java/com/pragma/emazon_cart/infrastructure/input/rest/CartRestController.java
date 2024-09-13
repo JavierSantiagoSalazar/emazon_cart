@@ -44,17 +44,17 @@ public class CartRestController {
         return "Item deleted from cart";
     }
 
-    @Operation(summary = Constants.DELETE_FROM_CART)
+    @Operation(summary = Constants.BUY_FROM_CART)
     @ApiResponses(value = {
             @ApiResponse(
                     responseCode = HttpStatusCode.OK,
-                    description = Constants.ITEM_DELETED,
+                    description = Constants.ITEMS_PURCHASED,
                     content = @Content
             )
     })
-    @DeleteMapping("/")
-    public String deleteItemFromCart() {
-        return "Item deleted from cart";
+    @PostMapping("/buy")
+    public String buyItemsFromCart() {
+        return "Items purchased from cart";
     }
 
 }
