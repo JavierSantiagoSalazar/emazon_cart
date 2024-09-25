@@ -35,6 +35,16 @@ dependencies {
 	//Validation
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 
+	//Data-JPA
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+	//MapStruct
+	implementation 'org.mapstruct:mapstruct:1.6.0'
+	annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.0'
+
+	//MySQLConnector
+	implementation 'com.mysql:mysql-connector-j:9.0.0'
+
 	//OpenApi
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.1.0'
 
@@ -43,6 +53,15 @@ dependencies {
 
 	//JWT
 	implementation 'com.auth0:java-jwt:4.4.0'
+
+	// Feign
+	implementation 'org.springframework.cloud:spring-cloud-starter-openfeign:4.1.3'
+
+	// Apache Client
+	implementation 'io.github.openfeign:feign-httpclient:13.3'
+
+	//Mockito
+	testImplementation 'org.mockito:mockito-core:5.12.0'
 
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.security:spring-security-test'
