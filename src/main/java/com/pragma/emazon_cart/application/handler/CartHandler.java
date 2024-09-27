@@ -8,4 +8,6 @@ public interface CartHandler {
 
     void addItemsToCart(List<AddArticlesRequest> addArticlesRequestList);
 
+    void deleteItemsFromCart(List<Integer> articlesIds);
+
 }

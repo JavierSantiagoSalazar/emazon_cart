@@ -7,6 +7,7 @@ import com.pragma.emazon_cart.infrastructure.configuration.security.filter.JwtVa
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
@@ -20,6 +21,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -72,7 +74,7 @@ class CartRestControllerTest {
 
     @Test
     void givenInvalidArticleId_whenAddItemToCartIsCalled_thenReturns400() throws Exception {
-        AddArticlesRequest invalidArticle = new AddArticlesRequest(null, 2); // ID del artículo es null
+        AddArticlesRequest invalidArticle = new AddArticlesRequest(null, 2);
         listAddRequest.setData(List.of(invalidArticle));
 
         mockMvc.perform(post("/cart/")
@@ -94,8 +96,8 @@ class CartRestControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.statusCode").value(HttpStatus.BAD_REQUEST.name()))
                 .andExpect(jsonPath("$.message").value(
-                "[Article ID must be a positive number]"
-        ));
+                        "[Article ID must be a positive number]"
+                ));
     }
 
     @Test
@@ -130,6 +132,38 @@ class CartRestControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{invalidJson}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void givenValidArticleIds_whenDeleteItemsFromCartIsCalled_thenReturns204() throws Exception {
+
+        List<Integer> articleIds = List.of(1, 2, 3);
+
+        mockMvc.perform(delete("/cart/")
+                        .param("articlesIds", articleIds.stream()
+                                .map(String::valueOf).toArray(String[]::new)))
+                .andExpect(status().isNoContent());
+
+        Mockito.verify(cartHandler).deleteItemsFromCart(articleIds);
+    }
+
+    @Test
+    void givenEmptyArticleIds_whenDeleteItemsFromCartIsCalled_thenReturns400() throws Exception {
+
+        mockMvc.perform(delete("/cart/"))
+                .andExpect(status().isBadRequest());
+
+        Mockito.verify(cartHandler, Mockito.never()).deleteItemsFromCart(Mockito.anyList());
+    }
+
+    @Test
+    void givenInvalidParameterFormat_whenDeleteItemsFromCartIsCalled_thenReturns400() throws Exception {
+
+        mockMvc.perform(delete("/cart/")
+                        .param("articlesIds", "invalidId"))
+                .andExpect(status().isBadRequest());
+
+        Mockito.verify(cartHandler, Mockito.never()).deleteItemsFromCart(Mockito.anyList());
     }
 
 }

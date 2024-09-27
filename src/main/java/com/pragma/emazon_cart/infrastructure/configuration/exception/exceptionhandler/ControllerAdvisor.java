@@ -6,6 +6,7 @@ import com.pragma.emazon_cart.domain.exceptions.ArticleNotFoundException;
 import com.pragma.emazon_cart.domain.exceptions.ArticleRestockDateNotFoundException;
 import com.pragma.emazon_cart.domain.exceptions.CategoryLimitExceededException;
 import com.pragma.emazon_cart.domain.exceptions.ErrorCommunicatingServerException;
+import com.pragma.emazon_cart.domain.exceptions.InvalidInputException;
 import com.pragma.emazon_cart.domain.exceptions.JwtIsEmptyException;
 import com.pragma.emazon_cart.domain.exceptions.OutOfStockException;
 import com.pragma.emazon_cart.domain.exceptions.ParsingToJsonException;
@@ -169,6 +170,19 @@ public class ControllerAdvisor {
                 Response.builder()
                         .statusCode(HttpStatus.BAD_REQUEST)
                         .message(categoryLimitExceededException.getMessage())
+                        .build(),
+                HttpStatus.BAD_REQUEST
+        );
+    }
+
+    @ExceptionHandler(InvalidInputException.class)
+    public ResponseEntity<Response> handleInvalidInputException(
+            InvalidInputException invalidInputException
+    ) {
+        return new ResponseEntity<>(
+                Response.builder()
+                        .statusCode(HttpStatus.BAD_REQUEST)
+                        .message(invalidInputException.getMessage())
                         .build(),
                 HttpStatus.BAD_REQUEST
         );
