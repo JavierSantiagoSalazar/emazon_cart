@@ -3,10 +3,11 @@ package com.pragma.emazon_cart.domain.utils;
 public class Constants {
 
 
-
     private Constants() {
         throw new IllegalStateException("Utility class");
     }
+
+    public static final Short ZERO = 0;
 
     /* --- VALIDATION CONSTANTS: CART --- */
 
@@ -26,6 +27,9 @@ public class Constants {
     public static final String ERROR_PROCESSING_RESPONSE_BODY = "Error processing response body";
     public static final String INVALID_REQUEST_ERROR = "Invalid request to the endpoint: ";
     public static final String ARTICLE_ALREADY_EXISTS_ERROR_MESSAGE = "The item already exists in the cart";
+    public static final String ARTICLES_IDS_MUST_BE_POSITIVE_ERROR_MESSAGE = "IDs must be positive";
+    public static final String ARTICLES_NOT_FOUND = "One or more articles not found";
+    public static final String CART_NOT_FOUND_ERROR_MESSAGE = "Cart not found for user: ";
 
     /* --- FEIGN CONSTANTS --- */
 

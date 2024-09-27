@@ -2,6 +2,8 @@ package com.pragma.emazon_cart.domain.usecase;
 
 import com.pragma.emazon_cart.domain.api.CartServicePort;
 import com.pragma.emazon_cart.domain.exceptions.ArticleAlreadyExistsInCartException;
+import com.pragma.emazon_cart.domain.exceptions.ArticleNotFoundException;
+import com.pragma.emazon_cart.domain.exceptions.CartNotFoundException;
 import com.pragma.emazon_cart.domain.exceptions.CategoryLimitExceededException;
 import com.pragma.emazon_cart.domain.exceptions.OutOfStockException;
 import com.pragma.emazon_cart.domain.model.AddArticles;
@@ -19,70 +21,162 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @AllArgsConstructor
-    public class CartUseCase implements CartServicePort {
+public class CartUseCase implements CartServicePort {
 
-        private static final Short CATEGORY_LIMIT = 3;
+    private static final Short CATEGORY_LIMIT = 3;
+    private static final int START_INDEX = 0;
+    private static final int REMOVAL_INDEX = -1;
+    private static final int ARTICLE_ID_INDEX = 0;
 
-        private final CartPersistencePort cartPersistencePort;
-        private final TokenServicePort tokenServicePort;
-        private final FeignClientPort feignClientPort;
+    private final CartPersistencePort cartPersistencePort;
+    private final TokenServicePort tokenServicePort;
+    private final FeignClientPort feignClientPort;
 
-        @Override
-        public void addItemsToCart(AddArticles addArticles) {
+    @Override
+    public void addItemsToCart(AddArticles addArticles) {
 
-            List<Article> newArticles = feignClientPort.getArticlesByIds(addArticles.getArticleIds());
+        List<Article> newArticles = fetchNewArticles(addArticles.getArticleIds());
 
-            List<Integer> outOfStockArticleIds = validateArticleStock(newArticles, addArticles.getArticleAmounts());
+        List<Integer> outOfStockArticleIds = validateArticleStock(newArticles, addArticles.getArticleAmounts());
 
-            if (!outOfStockArticleIds.isEmpty()) {
-                List<LocalDate> restockDates = feignClientPort.getRestockDates(outOfStockArticleIds);
-                handleOutOfStockArticles(outOfStockArticleIds, restockDates);
-            }
+        handleOutOfStockArticles(outOfStockArticleIds);
 
-            Integer userId = tokenServicePort.extractUserIdFromToken();
+        Integer userId = tokenServicePort.extractUserIdFromToken();
 
-            Optional<Cart> optionalCart = cartPersistencePort.findCartByUserId(userId);
+        Optional<Cart> optionalCart = cartPersistencePort.findCartByUserId(userId);
 
-            Cart cart = optionalCart.orElseGet(() -> Cart.builder()
-                    .cartUserId(userId)
-                    .cartArticleList(new ArrayList<>())
-                    .cartAmountList(new ArrayList<>())
-                    .cartCreationDate(LocalDate.now())
-                    .cartLastUpdateDate(LocalDate.now())
-                    .build());
+        Cart cart = optionalCart.orElseGet(() -> createNewCart(userId));
 
-            List<Integer> existingArticleIds = cart.getCartArticleList()
-                    .stream()
-                    .map(Article::getArticleId)
-                    .toList();
+        validateArticlesByCategory(fetchExistingArticles(cart), newArticles);
 
-            List<Article> existingArticles = feignClientPort.getArticlesByIds(existingArticleIds);
+        checkIfArticlesAlreadyInCart(cart, newArticles);
 
-            validateArticlesByCategory(existingArticles, newArticles);
+        updateCartWithNewArticles(cart, newArticles, addArticles.getArticleAmounts(), optionalCart.isPresent());
 
-            boolean articleAlreadyExistsInCart = newArticles.stream()
-                    .anyMatch(article -> cart.getCartArticleList().stream()
-                            .anyMatch(cartArticle -> cartArticle.getArticleId().equals(article.getArticleId())));
+        cartPersistencePort.saveCart(cart);
+    }
 
-            if (articleAlreadyExistsInCart) {
-                throw new ArticleAlreadyExistsInCartException(Constants.ARTICLE_ALREADY_EXISTS_ERROR_MESSAGE);
-            }
+    @Override
+    public void deleteItemsFromCart(List<Integer> articlesIds) {
 
-            if (optionalCart.isPresent()) {
-                cart.getCartArticleList().addAll(newArticles);
-                cart.getCartAmountList().addAll(addArticles.getArticleAmounts());
-                cart.setCartLastUpdateDate(LocalDate.now());
-            } else {
-                cart.setCartArticleList(new ArrayList<>(newArticles));
-                cart.setCartAmountList(new ArrayList<>(addArticles.getArticleAmounts()));
-            }
+        Integer userId = tokenServicePort.extractUserIdFromToken();
 
-            cartPersistencePort.saveCart(cart);
+        Cart cart = findUserCart(userId);
+
+        validateArticlesExistInCart(cart, articlesIds);
+
+        removeArticlesAndAmounts(cart, articlesIds);
+        updateCartLastUpdateDate(cart);
+
+        cartPersistencePort.saveCart(cart);
+    }
+
+    private void updateCartLastUpdateDate(Cart cart) {
+        cart.setCartLastUpdateDate(LocalDate.now());
+    }
+
+    private void validateArticlesExistInCart(Cart cart, List<Integer> articlesIds) {
+        Set<Integer> articleIdSet = cart.getCartArticleList()
+                .stream()
+                .map(Article::getArticleId)
+                .collect(Collectors.toSet());
+
+        if (!articleIdSet.containsAll(articlesIds)) {
+            throw new ArticleNotFoundException(Constants.ARTICLES_NOT_FOUND);
         }
+    }
+
+    private Cart findUserCart(Integer userId) {
+        return cartPersistencePort.findCartByUserId(userId)
+                .orElseThrow(() -> new CartNotFoundException(Constants.CART_NOT_FOUND_ERROR_MESSAGE + userId));
+    }
+
+    private void removeArticlesAndAmounts(Cart cart, List<Integer> articleIdsToRemove) {
+
+        List<Integer> articleIdList = cart.getCartArticleList()
+                .stream()
+                .map(Article::getArticleId)
+                .toList();
+
+        List<Article> updatedArticleList = new ArrayList<>(cart.getCartArticleList());
+        List<Integer> updatedAmountList = new ArrayList<>(cart.getCartAmountList());
+
+        for (int i = articleIdsToRemove.size() - 1; i >= START_INDEX; i--) {
+            Integer articleId = articleIdsToRemove.get(i);
+            int index = articleIdList.indexOf(articleId);
+            if (index != REMOVAL_INDEX) {
+                updatedArticleList.remove(index);
+                updatedAmountList.remove(index);
+            }
+        }
+
+        cart.setCartArticleList(updatedArticleList);
+        cart.setCartAmountList(updatedAmountList);
+    }
+
+    private List<Article> fetchExistingArticles(Cart cart) {
+
+        List<Integer> existingArticleIds = cart.getCartArticleList()
+                .stream()
+                .map(Article::getArticleId)
+                .toList();
+        return feignClientPort.getArticlesByIds(existingArticleIds);
+    }
+
+    private void checkIfArticlesAlreadyInCart(Cart cart, List<Article> newArticles) {
+
+        boolean articleAlreadyExistsInCart = newArticles.stream()
+                .anyMatch(article -> cart.getCartArticleList().stream()
+                        .anyMatch(cartArticle -> cartArticle.getArticleId().equals(article.getArticleId())));
+
+        if (articleAlreadyExistsInCart) {
+            throw new ArticleAlreadyExistsInCartException(Constants.ARTICLE_ALREADY_EXISTS_ERROR_MESSAGE);
+        }
+    }
+
+    private void updateCartWithNewArticles(
+            Cart cart,
+            List<Article> newArticles,
+            List<Integer> newArticleAmounts,
+            boolean cartExists
+    ) {
+
+        if (cartExists) {
+            cart.getCartArticleList().addAll(newArticles);
+            cart.getCartAmountList().addAll(newArticleAmounts);
+        } else {
+            cart.setCartArticleList(new ArrayList<>(newArticles));
+            cart.setCartAmountList(new ArrayList<>(newArticleAmounts));
+        }
+        cart.setCartLastUpdateDate(LocalDate.now());
+    }
+
+    private List<Article> fetchNewArticles(List<Integer> articleIds) {
+        return feignClientPort.getArticlesByIds(articleIds);
+    }
+
+    private void handleOutOfStockArticles(List<Integer> outOfStockArticleIds) {
+
+        if (!outOfStockArticleIds.isEmpty()) {
+            List<LocalDate> restockDates = feignClientPort.getRestockDates(outOfStockArticleIds);
+            handleOutOfStockArticles(outOfStockArticleIds, restockDates);
+        }
+    }
+
+    private Cart createNewCart(Integer userId) {
+        return Cart.builder()
+                .cartUserId(userId)
+                .cartArticleList(new ArrayList<>())
+                .cartAmountList(new ArrayList<>())
+                .cartCreationDate(LocalDate.now())
+                .cartLastUpdateDate(LocalDate.now())
+                .build();
+    }
 
     private List<Integer> validateArticleStock(List<Article> articleList, List<Integer> requestedAmounts) {
 
@@ -119,7 +213,7 @@ import java.util.stream.Stream;
                         .append(Constants.CART_NO_RESTOCKING_DATE);
             }
         }
-        
+
         throw new OutOfStockException(message.toString());
     }
 

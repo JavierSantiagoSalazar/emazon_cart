@@ -15,7 +15,10 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 
 @RestController
@@ -57,14 +60,30 @@ public class CartRestController {
     @Operation(summary = Constants.DELETE_FROM_CART)
     @ApiResponses(value = {
             @ApiResponse(
-                    responseCode = HttpStatusCode.OK,
+                    responseCode = HttpStatusCode.NO_CONTENT,
                     description = Constants.ITEM_DELETED,
+                    content = @Content
+            ),
+            @ApiResponse(
+                    responseCode = HttpStatusCode.NOT_FOUND,
+                    description = Constants.ARTICLE_NOT_FOUND,
+                    content = @Content
+            ),
+            @ApiResponse(
+                    responseCode = HttpStatusCode.BAD_REQUEST,
+                    description = Constants.INVALID_REQUEST,
+                    content = @Content
+            ),
+            @ApiResponse(
+                    responseCode = HttpStatusCode.INTERNAL_SERVER_ERROR,
+                    description = Constants.INTERNAL_SERVER_ERROR,
                     content = @Content
             )
     })
     @DeleteMapping("/")
-    public String deleteItemFromCart() {
-        return "Item deleted from cart";
+    public ResponseEntity<Void> deleteItemsFromCart(@RequestParam List<Integer> articlesIds) {
+        cartHandler.deleteItemsFromCart(articlesIds);
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = Constants.BUY_FROM_CART)

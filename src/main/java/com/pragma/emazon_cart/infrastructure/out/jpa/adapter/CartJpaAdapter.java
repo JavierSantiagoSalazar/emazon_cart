@@ -24,4 +24,5 @@ public class CartJpaAdapter implements CartPersistencePort {
         return cartRepository.findByCartUserId(userId)
                 .map(cartEntityMapper::toDomain);
     }
+
 }
