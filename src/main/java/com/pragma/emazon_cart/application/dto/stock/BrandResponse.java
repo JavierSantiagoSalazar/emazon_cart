@@ -9,6 +9,5 @@ public class BrandResponse {
 
     private Integer brandId;
     private String brandName;
-    private String brandDescription;
 
 }

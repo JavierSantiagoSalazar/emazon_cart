@@ -2,11 +2,17 @@ package com.pragma.emazon_cart.domain.usecase;
 
 import com.pragma.emazon_cart.domain.api.CartServicePort;
 import com.pragma.emazon_cart.domain.exceptions.ArticleAlreadyExistsInCartException;
+import com.pragma.emazon_cart.domain.exceptions.ArticleAmountMismatchException;
 import com.pragma.emazon_cart.domain.exceptions.ArticleNotFoundException;
 import com.pragma.emazon_cart.domain.exceptions.CartNotFoundException;
 import com.pragma.emazon_cart.domain.exceptions.CategoryLimitExceededException;
+import com.pragma.emazon_cart.domain.exceptions.InvalidFilteringParameterException;
+import com.pragma.emazon_cart.domain.exceptions.NoContentArticleException;
 import com.pragma.emazon_cart.domain.exceptions.OutOfStockException;
+import com.pragma.emazon_cart.domain.exceptions.PageOutOfBoundsException;
 import com.pragma.emazon_cart.domain.model.AddArticles;
+import com.pragma.emazon_cart.domain.model.CartResponse;
+import com.pragma.emazon_cart.domain.model.Pagination;
 import com.pragma.emazon_cart.domain.model.stock.Article;
 import com.pragma.emazon_cart.domain.model.stock.Category;
 import com.pragma.emazon_cart.domain.spi.CartPersistencePort;
@@ -18,12 +24,20 @@ import lombok.AllArgsConstructor;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
+
+import static com.pragma.emazon_cart.domain.utils.Constants.GET_BY_ARTICLE;
+import static com.pragma.emazon_cart.domain.utils.Constants.GET_BY_BRAND;
+import static com.pragma.emazon_cart.domain.utils.Constants.GET_BY_CATEGORY;
+import static com.pragma.emazon_cart.domain.utils.Constants.PAGE_INDEX_HELPER;
+import static com.pragma.emazon_cart.domain.utils.Constants.ZERO;
 
 @AllArgsConstructor
 public class CartUseCase implements CartServicePort {
@@ -31,7 +45,9 @@ public class CartUseCase implements CartServicePort {
     private static final Short CATEGORY_LIMIT = 3;
     private static final int START_INDEX = 0;
     private static final int REMOVAL_INDEX = -1;
-    private static final int ARTICLE_ID_INDEX = 0;
+    private static final int ONE = 1;
+    private static final String DESC_COMPARATOR = "desc";
+    public static final int OUT_OF_STOCK = 0;
 
     private final CartPersistencePort cartPersistencePort;
     private final TokenServicePort tokenServicePort;
@@ -76,18 +92,188 @@ public class CartUseCase implements CartServicePort {
         cartPersistencePort.saveCart(cart);
     }
 
+    @Override
+    public Pagination<CartResponse> getAllArticlesFromCart(
+            String sortOrder,
+            String filterBy,
+            String brandName,
+            String categoryName,
+            Integer page,
+            Integer size
+    ) {
+
+        Integer userId = tokenServicePort.extractUserIdFromToken();
+
+        Cart cart = findUserCart(userId);
+
+        List<Article> articleList = fetchArticlesFromCart(cart);
+        List<Integer> amountList = cart.getCartAmountList();
+
+        validateArticleAndAmountSize(articleList, amountList);
+
+        List<CartResponse> cartResponses = buildCartResponses(articleList, amountList);
+
+        validateData(filterBy, cartResponses);
+
+        List<CartResponse> sortedAndFilteredCartResponses =
+                sortAndFilterCartResponses(cartResponses, sortOrder, filterBy, brandName, categoryName);
+
+        return createPaginatedResponse(sortedAndFilteredCartResponses, page, size);
+    }
+
+    private Pagination<CartResponse> createPaginatedResponse(
+            List<CartResponse> filteredCartResponses,
+            Integer page,
+            Integer size
+    ) {
+
+        if (filteredCartResponses.isEmpty()) {
+            throw new NoContentArticleException();
+        }
+
+        Double totalPrice = calculateTotalPrice(filteredCartResponses);
+
+        Integer totalItems = filteredCartResponses.size();
+        Integer totalPages = calculateTotalPages(totalItems, size);
+        Integer fromIndex = Math.min((page - PAGE_INDEX_HELPER) * size, totalItems);
+        Integer toIndex = Math.min(fromIndex + size, totalItems);
+        Boolean isLastPage = page >= totalPages;
+
+        if (page > totalPages || page < PAGE_INDEX_HELPER) {
+            throw new PageOutOfBoundsException(page, totalPages);
+        }
+
+        List<CartResponse> paginatedCartResponse = filteredCartResponses.subList(fromIndex, toIndex);
+
+        return new Pagination<>(
+                paginatedCartResponse,
+                totalPrice,
+                page,
+                size,
+                (long) totalItems,
+                totalPages,
+                isLastPage
+        );
+    }
+
+    private Double calculateTotalPrice(List<CartResponse> cartResponses) {
+        return cartResponses.stream()
+                .mapToDouble(cartResponse ->
+                        cartResponse.getCartArticle().getArticlePrice() * cartResponse.getCartAmount())
+                .sum();
+    }
+
+    private Integer calculateTotalPages(Integer totalItems, Integer size) {
+        return (int) Math.ceil((double) totalItems / size);
+    }
+
+    private List<CartResponse> sortAndFilterCartResponses(
+            List<CartResponse> cartResponses,
+            String sortOrder,
+            String filterBy,
+            String brandName,
+            String categoryName
+    ) {
+
+        Comparator<CartResponse> comparator = getComparator(sortOrder);
+
+        List<CartResponse> sortedCartResponses = cartResponses.stream()
+                .sorted(comparator)
+                .toList();
+
+        return applyFilters(filterBy, brandName, categoryName, sortedCartResponses);
+    }
+
+    private Comparator<CartResponse> getComparator(String sortOrder) {
+        return sortOrder.equalsIgnoreCase(DESC_COMPARATOR)
+                ? Comparator.comparing((CartResponse cartResponse) -> cartResponse
+                .getCartArticle()
+                .getArticleName())
+                .reversed()
+                : Comparator.comparing((CartResponse cartResponse) -> cartResponse.getCartArticle().getArticleName());
+    }
+
+    private List<CartResponse> buildCartResponses(List<Article> articleList, List<Integer> amountList) {
+        return IntStream.range(ZERO, articleList.size())
+                .mapToObj(index -> {
+                    Article article = articleList.get(index);
+                    Integer amount = amountList.get(index);
+
+                    LocalDate restockDate = article.getArticleAmount() == OUT_OF_STOCK ?
+                            feignClientPort.getRestockDates(List.of(article.getArticleId())).get(ZERO) : null;
+
+                    return new CartResponse(article, amount, restockDate);
+                }).toList();
+    }
+
+    private void validateArticleAndAmountSize(List<Article> articleList, List<Integer> amountList) {
+        if (articleList.size() != amountList.size()) {
+            throw new ArticleAmountMismatchException(Constants.ARTICLES_AMOUNTS_MISMATCH_ERROR_MESSAGE);
+        }
+    }
+
+    private List<Article> fetchArticlesFromCart(Cart cart) {
+        List<Integer> articleIdList = cart.getCartArticleList()
+                .stream()
+                .map(Article::getArticleId)
+                .toList();
+
+        return fetchNewArticles(articleIdList);
+    }
+
+    private List<CartResponse> applyFilters(
+            String filterBy,
+            String brandName,
+            String categoryName,
+            List<CartResponse> cartResponses
+    ) {
+
+        if (filterBy.equalsIgnoreCase(GET_BY_CATEGORY)) {
+            return cartResponses.stream()
+                    .filter(cartResponse -> cartResponse.getCartArticle().getArticleCategories().stream()
+                            .anyMatch(category -> category.getName().equals(categoryName)))
+                    .toList();
+        }
+
+        if (filterBy.equalsIgnoreCase(GET_BY_BRAND)) {
+            return cartResponses.stream()
+                    .filter(cartResponse -> cartResponse
+                            .getCartArticle()
+                            .getArticleBrand()
+                            .getBrandName()
+                            .equals(brandName))
+                    .toList();
+        }
+
+        return cartResponses;
+    }
+
+    private void validateData(String getBy, List<CartResponse> cartResponseList) {
+
+        if (cartResponseList.isEmpty()) {
+            throw new ArticleNotFoundException(Constants.ARTICLES_NOT_FOUND);
+        }
+
+        if (!getBy.equalsIgnoreCase(GET_BY_ARTICLE) &&
+                !getBy.equalsIgnoreCase(GET_BY_BRAND) &&
+                !getBy.equalsIgnoreCase(GET_BY_CATEGORY)) {
+            throw new InvalidFilteringParameterException(getBy);
+        }
+    }
+
     private void updateCartLastUpdateDate(Cart cart) {
         cart.setCartLastUpdateDate(LocalDate.now());
     }
 
     private void validateArticlesExistInCart(Cart cart, List<Integer> articlesIds) {
+
         Set<Integer> articleIdSet = cart.getCartArticleList()
                 .stream()
                 .map(Article::getArticleId)
                 .collect(Collectors.toSet());
 
         if (!articleIdSet.containsAll(articlesIds)) {
-            throw new ArticleNotFoundException(Constants.ARTICLES_NOT_FOUND);
+            throw new ArticleNotFoundException(Constants.ONE_OR_MORE_ARTICLES_NOT_FOUND);
         }
     }
 
@@ -106,7 +292,7 @@ public class CartUseCase implements CartServicePort {
         List<Article> updatedArticleList = new ArrayList<>(cart.getCartArticleList());
         List<Integer> updatedAmountList = new ArrayList<>(cart.getCartAmountList());
 
-        for (int i = articleIdsToRemove.size() - 1; i >= START_INDEX; i--) {
+        for (int i = articleIdsToRemove.size() - ONE; i >= START_INDEX; i--) {
             Integer articleId = articleIdsToRemove.get(i);
             int index = articleIdList.indexOf(articleId);
             if (index != REMOVAL_INDEX) {
@@ -147,6 +333,8 @@ public class CartUseCase implements CartServicePort {
     ) {
 
         if (cartExists) {
+            cart.setCartArticleList(new ArrayList<>(cart.getCartArticleList()));
+            cart.setCartAmountList(new ArrayList<>(cart.getCartAmountList()));
             cart.getCartArticleList().addAll(newArticles);
             cart.getCartAmountList().addAll(newArticleAmounts);
         } else {
@@ -182,9 +370,9 @@ public class CartUseCase implements CartServicePort {
 
         List<Integer> outOfStockArticleIds = new ArrayList<>();
 
-        for (int i = 0; i < articleList.size(); i++) {
-            Article article = articleList.get(i);
-            Integer requestedAmount = requestedAmounts.get(i);
+        for (int index = ZERO; index < articleList.size(); index++) {
+            Article article = articleList.get(index);
+            Integer requestedAmount = requestedAmounts.get(index);
 
             if (requestedAmount > article.getArticleAmount()) {
                 outOfStockArticleIds.add(article.getArticleId());
@@ -198,7 +386,7 @@ public class CartUseCase implements CartServicePort {
 
         StringBuilder message = new StringBuilder(Constants.CART_OUT_OF_STOCK_ARTICLES);
 
-        for (int i = 0; i < outOfStockArticleIds.size(); i++) {
+        for (int i = ZERO; i < outOfStockArticleIds.size(); i++) {
             Integer articleId = outOfStockArticleIds.get(i);
             LocalDate restockDate = restockDates.get(i);
 

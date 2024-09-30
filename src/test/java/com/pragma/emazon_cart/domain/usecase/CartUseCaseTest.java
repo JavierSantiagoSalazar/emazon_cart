@@ -4,10 +4,14 @@ import com.pragma.emazon_cart.domain.exceptions.ArticleAlreadyExistsInCartExcept
 import com.pragma.emazon_cart.domain.exceptions.ArticleNotFoundException;
 import com.pragma.emazon_cart.domain.exceptions.CartNotFoundException;
 import com.pragma.emazon_cart.domain.exceptions.OutOfStockException;
+import com.pragma.emazon_cart.domain.exceptions.PageOutOfBoundsException;
 import com.pragma.emazon_cart.domain.model.AddArticles;
 import com.pragma.emazon_cart.domain.model.Cart;
+import com.pragma.emazon_cart.domain.model.CartResponse;
+import com.pragma.emazon_cart.domain.model.Pagination;
 import com.pragma.emazon_cart.domain.model.stock.Article;
 import com.pragma.emazon_cart.domain.model.stock.Brand;
+import com.pragma.emazon_cart.domain.model.stock.Category;
 import com.pragma.emazon_cart.domain.spi.CartPersistencePort;
 import com.pragma.emazon_cart.domain.spi.FeignClientPort;
 import com.pragma.emazon_cart.domain.spi.TokenServicePort;
@@ -162,7 +166,7 @@ class CartUseCaseTest {
             cartUseCase.deleteItemsFromCart(articleIdList);
         });
 
-        assertEquals(Constants.ARTICLES_NOT_FOUND, exception.getMessage());
+        assertEquals(Constants.ONE_OR_MORE_ARTICLES_NOT_FOUND, exception.getMessage());
     }
 
     @Test
@@ -171,8 +175,22 @@ class CartUseCaseTest {
         List<Integer> articleIdsToRemove = Arrays.asList(1, 2);
 
         List<Article> articles = Arrays.asList(
-                new Article(1, "Article 1", "Description 1", 5, 100.0, new Brand(1, "Brand 1"), new ArrayList<>()),
-                new Article(2, "Article 2", "Description 2", 3, 150.0, new Brand(2, "Brand 2"), new ArrayList<>())
+                new Article(
+                        1,
+                        "Article 1",
+                        "Description 1",
+                        5, 100.0,
+                        new Brand(1, "Brand 1"),
+                        new ArrayList<>()),
+                new Article(
+                        2,
+                        "Article 2",
+                        "Description 2",
+                        3,
+                        150.0,
+                        new Brand(2, "Brand 2"),
+                        new ArrayList<>()
+                )
         );
 
         Cart cart = Cart.builder()
@@ -213,8 +231,20 @@ class CartUseCaseTest {
         List<Integer> articleIdList = Arrays.asList(1, 2);
         List<Integer> articleAmounts = Arrays.asList(5, 3);
 
-        Article article1 = new Article(1, "Article 1", "Description 1", 10, 100.0, null, List.of());
-        Article article2 = new Article(2, "Article 2", "Description 2", 8, 200.0, null, List.of());
+        Article article1 = new Article(1,
+                "Article 1",
+                "Description 1",
+                10,
+                100.0,
+                null, List.of());
+        Article article2 = new Article(2,
+                "Article 2",
+                "Description 2",
+                8,
+                200.0,
+                null,
+                List.of()
+        );
 
         List<Article> articlesList = Arrays.asList(article1, article2);
 
@@ -234,5 +264,151 @@ class CartUseCaseTest {
         assertEquals(articlesList, savedCart.getCartArticleList());
         assertEquals(articleAmounts, savedCart.getCartAmountList());
     }
+
+    @Test
+    void givenValidPageAndSize_whenGetAllArticlesFromCart_thenReturnsPaginatedResponse() {
+
+        Integer userId = 123;
+        Cart cart = Cart.builder()
+                .cartUserId(userId)
+                .cartArticleList(newArticles)
+                .cartAmountList(Arrays.asList(2, 3))
+                .build();
+
+        when(tokenServicePort.extractUserIdFromToken()).thenReturn(userId);
+        when(cartPersistencePort.findCartByUserId(userId)).thenReturn(Optional.of(cart));
+        when(feignClientPort.getArticlesByIds(anyList())).thenReturn(newArticles);
+
+        Pagination<CartResponse> pagination = cartUseCase.getAllArticlesFromCart(
+                "asc", "articleName", null, null, 1, 10);
+
+        assertEquals(2, pagination.getItems().size());
+        assertEquals(200.0 + 450.0, pagination.getTotalPrice());
+        assertEquals(1, pagination.getTotalPages());
+        assertTrue(pagination.getIsLastPage());
+    }
+
+    @Test
+    void givenOutOfBoundsPage_whenGetAllArticlesFromCart_thenThrowsPageOutOfBoundsException() {
+
+        Integer userId = 123;
+        List<Article> articlesInCart = Arrays.asList(
+                new Article(1,
+                        "Article 1",
+                        "Description 1",
+                        5,
+                        100.0,
+                        new Brand(1,"Brand 1"),
+                        new ArrayList<>()
+                ),
+                new Article(2,
+                        "Article 2",
+                        "Description 2",
+                        3,
+                        150.0,
+                        new Brand(2,"Brand 2"),
+                        new ArrayList<>()
+                )
+        );
+        List<Integer> articleAmounts = Arrays.asList(2, 3);
+
+        Cart cart = Cart.builder()
+                .cartUserId(userId)
+                .cartArticleList(articlesInCart)
+                .cartAmountList(articleAmounts)
+                .build();
+
+        when(feignClientPort.getArticlesByIds(Arrays.asList(1, 2))).thenReturn(articlesInCart);
+        when(tokenServicePort.extractUserIdFromToken()).thenReturn(userId);
+        when(cartPersistencePort.findCartByUserId(userId)).thenReturn(Optional.of(cart));
+
+        PageOutOfBoundsException exception = assertThrows(PageOutOfBoundsException.class, () -> {
+            cartUseCase.getAllArticlesFromCart(
+                    "asc",
+                    "articleName",
+                    null,
+                    null,
+                    3,
+                    10
+            );
+        });
+
+        assertTrue(exception.getMessage().contains("is out of range. Total pages:"));
+    }
+
+    @Test
+    void givenCategoryFilter_whenGetAllArticlesFromCart_thenReturnsFilteredResults() {
+        Integer userId = 123;
+        Article articleWithCategory = new Article(3,
+                "Article 3",
+                "Description 3",
+                5,
+                200.0,
+                new Brand(1, "Brand 1"),
+                List.of(new Category(1, "Electronics")));
+        List<Article> articlesWithCategory = List.of(articleWithCategory);
+
+        Cart cart = Cart.builder()
+                .cartUserId(userId)
+                .cartArticleList(articlesWithCategory)
+                .cartAmountList(List.of(1))
+                .build();
+
+        when(tokenServicePort.extractUserIdFromToken()).thenReturn(userId);
+        when(cartPersistencePort.findCartByUserId(userId)).thenReturn(Optional.of(cart));
+        when(feignClientPort.getArticlesByIds(anyList())).thenReturn(articlesWithCategory);
+
+        Pagination<CartResponse> pagination = cartUseCase.getAllArticlesFromCart(
+                "asc",
+                "categoryName",
+                null,
+                "Electronics",
+                1,
+                10);
+
+        assertEquals(1, pagination.getItems().size());
+        assertEquals(
+                "Electronics",
+                pagination.getItems().get(0).getCartArticle().getArticleCategories().get(0).getName()
+        );
+    }
+
+    @Test
+    void givenBrandFilter_whenGetAllArticlesFromCart_thenReturnsFilteredResults() {
+        Integer userId = 123;
+        Article articleWithBrand = new Article(4,
+                "Article 4",
+                "Description 4",
+                5,
+                250.0,
+                new Brand(1, "Brand 1"),
+                List.of(new Category(2, "Home Appliances")));
+        List<Article> articlesWithBrand = List.of(articleWithBrand);
+
+        Cart cart = Cart.builder()
+                .cartUserId(userId)
+                .cartArticleList(articlesWithBrand)
+                .cartAmountList(List.of(1))
+                .build();
+
+        when(tokenServicePort.extractUserIdFromToken()).thenReturn(userId);
+        when(cartPersistencePort.findCartByUserId(userId)).thenReturn(Optional.of(cart));
+        when(feignClientPort.getArticlesByIds(anyList())).thenReturn(articlesWithBrand);
+
+        Pagination<CartResponse> pagination = cartUseCase.getAllArticlesFromCart(
+                "asc",
+                "brandName",
+                "Brand 1",
+                null,
+                1,
+                10);
+
+        assertEquals(1, pagination.getItems().size());
+        assertEquals(
+                "Brand 1",
+                pagination.getItems().get(0).getCartArticle().getArticleBrand().getBrandName()
+        );
+    }
+
 
 }

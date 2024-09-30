@@ -1,7 +1,9 @@
 package com.pragma.emazon_cart.infrastructure.input.rest;
 
+import com.pragma.emazon_cart.application.dto.CartResponseDto;
 import com.pragma.emazon_cart.application.dto.ListAddRequest;
 import com.pragma.emazon_cart.application.handler.CartHandler;
+import com.pragma.emazon_cart.domain.model.Pagination;
 import com.pragma.emazon_cart.domain.utils.Constants;
 import com.pragma.emazon_cart.domain.utils.HttpStatusCode;
 import io.swagger.v3.oas.annotations.Operation;
@@ -9,9 +11,11 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -84,6 +88,20 @@ public class CartRestController {
     public ResponseEntity<Void> deleteItemsFromCart(@RequestParam List<Integer> articlesIds) {
         cartHandler.deleteItemsFromCart(articlesIds);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/")
+    public ResponseEntity<Pagination<CartResponseDto>> getArticles(
+            @RequestParam(defaultValue = Constants.ASC_SORT_ORDER) String sortOrder,
+            @RequestParam(defaultValue = Constants.ARTICLE_NAME) String filterBy,
+            @RequestParam(required = false) String brandName,
+            @RequestParam(required = false) String categoryName,
+            @RequestParam(defaultValue = Constants.PAGE_DEFAULT_VALUE) @Min(0) Integer page,
+            @RequestParam(defaultValue = Constants.SIZE_DEFAULT_VALUE) @Min(1) Integer size
+    ) {
+        Pagination<CartResponseDto> allArticlesFromCart =
+                cartHandler.getAllArticlesFromCart(sortOrder, filterBy, brandName, categoryName, page, size);
+        return ResponseEntity.ok(allArticlesFromCart);
     }
 
     @Operation(summary = Constants.BUY_FROM_CART)

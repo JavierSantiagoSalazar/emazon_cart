@@ -2,7 +2,6 @@ package com.pragma.emazon_cart.domain.utils;
 
 public class Constants {
 
-
     private Constants() {
         throw new IllegalStateException("Utility class");
     }
@@ -25,11 +24,20 @@ public class Constants {
     public static final String CATEGORY_LIMIT_EXCEEDED_PREFIX_ERROR_MESSAGE = "The limit of articles in the category '";
     public static final String CATEGORY_LIMIT_EXCEEDED_SUFFIX_ERROR_MESSAGE = "' has been exceeded. No more than 3 items can be added.";
     public static final String ERROR_PROCESSING_RESPONSE_BODY = "Error processing response body";
+    public static final String INVALID_REQUEST_PARAMETERS_ERROR_RESPONSE = "Invalid parameters: ";
+    public static final String VALIDATION_FAILURE_REQUEST_ERROR_RESPONSE = "Validation failure: ";
     public static final String INVALID_REQUEST_ERROR = "Invalid request to the endpoint: ";
     public static final String ARTICLE_ALREADY_EXISTS_ERROR_MESSAGE = "The item already exists in the cart";
     public static final String ARTICLES_IDS_MUST_BE_POSITIVE_ERROR_MESSAGE = "IDs must be positive";
-    public static final String ARTICLES_NOT_FOUND = "One or more articles not found";
+    public static final String ONE_OR_MORE_ARTICLES_NOT_FOUND = "One or more articles not found";
+    public static final String ARTICLES_NOT_FOUND = "You have no items in your cart";
+    public static final String ARTICLES_AMOUNTS_MISMATCH_ERROR_MESSAGE = "The size of the item list does not match the quantity list";
     public static final String CART_NOT_FOUND_ERROR_MESSAGE = "Cart not found for user: ";
+    public static final String ARTICLE_INVALID_FILTER_PARAMETER = "Invalid value for filterBy parameter: ";
+    public static final String ARTICLE_ALLOWED_FILTER_VALUES = ". Allowed values are 'articleName', 'brandName', 'categoryName'.";
+    public static final String ARTICLE_NO_CONTENT_MESSAGE = "There are currently no articles";
+    public static final String PAGE_OUT_OF_BOUNDS_PAGE = "Page ";
+    public static final String PAGE_OUT_OF_BOUNDS_TOTAL_PAGES = " is out of range. Total pages: ";
 
     /* --- FEIGN CONSTANTS --- */
 
@@ -90,7 +98,21 @@ public class Constants {
     public static final String CART_ARTICLE_ID = "Article Id ";
     public static final String CART_NO_RESTOCKING_DATE = ", No restocking date available";
 
+    public static final Short PAGE_INDEX_HELPER = 1;
+    public static final String GET_BY_ARTICLE = "articleName";
+    public static final String GET_BY_BRAND = "brandName";
+    public static final String GET_BY_CATEGORY = "categoryName";
+
     /* --- ROLES --- */
 
     public static final String ROLE_CLIENT = "CLIENT";
+
+    /* --- REQUEST CONSTANTS --- */
+
+    public static final String PAGE_DEFAULT_VALUE = "1";
+    public static final String SIZE_DEFAULT_VALUE = "10";
+
+    public static final String ASC_SORT_ORDER = "asc";
+    public static final String ARTICLE_NAME = "articleName";
+
 }

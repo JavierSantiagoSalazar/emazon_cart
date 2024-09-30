@@ -56,7 +56,7 @@ class FeignClientAdapterTest {
                         "Description 1",
                         5,
                         100.0,
-                        new BrandResponse(1, "Brand 1", "Description 1"),
+                        new BrandResponse(1, "Brand 1"),
                         Collections.singletonList(new EmbeddedCategoryResponse(1, "Category 1"))
                 ),
                 new ArticleResponse(
@@ -65,7 +65,7 @@ class FeignClientAdapterTest {
                         "Description 2",
                         3,
                         150.0,
-                        new BrandResponse(2, "Brand 2", "Description 2"),
+                        new BrandResponse(2, "Brand 2"),
                         Collections.singletonList(new EmbeddedCategoryResponse(2, "Category 2"))
                 )
         );
