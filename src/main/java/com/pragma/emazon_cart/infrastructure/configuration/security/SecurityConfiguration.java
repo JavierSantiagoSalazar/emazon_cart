@@ -39,6 +39,8 @@ public class SecurityConfiguration {
                             .hasRole(Constants.ROLE_CLIENT);
                     http.requestMatchers(HttpMethod.DELETE, Constants.CART_URL)
                             .hasRole(Constants.ROLE_CLIENT);
+                    http.requestMatchers(HttpMethod.GET, Constants.CART_URL)
+                            .hasRole(Constants.ROLE_CLIENT);
                     http.requestMatchers(HttpMethod.POST, Constants.CART_BUY_URL)
                             .hasRole(Constants.ROLE_CLIENT);
                     http.anyRequest().authenticated();

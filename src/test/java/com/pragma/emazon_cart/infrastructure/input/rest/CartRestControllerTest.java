@@ -1,8 +1,10 @@
 package com.pragma.emazon_cart.infrastructure.input.rest;
 
 import com.pragma.emazon_cart.application.dto.AddArticlesRequest;
+import com.pragma.emazon_cart.application.dto.CartResponseDto;
 import com.pragma.emazon_cart.application.dto.ListAddRequest;
 import com.pragma.emazon_cart.application.handler.CartHandler;
+import com.pragma.emazon_cart.domain.model.Pagination;
 import com.pragma.emazon_cart.infrastructure.configuration.security.filter.JwtValidatorFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +24,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -164,6 +167,76 @@ class CartRestControllerTest {
                 .andExpect(status().isBadRequest());
 
         Mockito.verify(cartHandler, Mockito.never()).deleteItemsFromCart(Mockito.anyList());
+    }
+
+    @Test
+    void givenMissingOptionalParams_whenGetArticlesIsCalled_thenReturns200() throws Exception {
+        Pagination<CartResponseDto> pagination = new Pagination<>(
+                List.of(new CartResponseDto()),
+                100.0,
+                1,
+                10,
+                1L,
+                1,
+                true
+        );
+
+        Mockito.when(cartHandler.getAllArticlesFromCart(
+                Mockito.anyString(), Mockito.anyString(),
+                Mockito.isNull(), Mockito.isNull(),
+                Mockito.anyInt(), Mockito.anyInt())
+        ).thenReturn(pagination);
+
+        mockMvc.perform(get("/cart/")
+                        .param("sortOrder", "asc")
+                        .param("filterBy", "articleName")
+                        .param("page", "1")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items").isArray())
+                .andExpect(jsonPath("$.totalPrice").value(100.0))
+                .andExpect(jsonPath("$.totalItems").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.isLastPage").value(true));
+    }
+
+    @Test
+    void givenInvalidPage_whenGetArticlesIsCalled_thenReturns400() throws Exception {
+        mockMvc.perform(get("/cart/")
+                        .param("sortOrder", "asc")
+                        .param("filterBy", "articleName")
+                        .param("page", "-1")
+                        .param("size", "10"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void givenInvalidSize_whenGetArticlesIsCalled_thenReturns400() throws Exception {
+        mockMvc.perform(get("/cart/")
+                        .param("sortOrder", "asc")
+                        .param("filterBy", "articleName")
+                        .param("page", "1")
+                        .param("size", "-10"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void givenNoArticlesInCart_whenGetArticlesIsCalled_thenReturns200() throws Exception {
+        Pagination<CartResponseDto> emptyPagination = new Pagination<>(
+                List.of(), 0.0, 1, 10, 0L, 0, true);
+
+        Mockito.when(cartHandler.getAllArticlesFromCart(
+                Mockito.anyString(), Mockito.anyString(),
+                Mockito.anyString(), Mockito.anyString(),
+                Mockito.anyInt(), Mockito.anyInt())
+        ).thenReturn(emptyPagination);
+
+        mockMvc.perform(get("/cart/")
+                        .param("sortOrder", "asc")
+                        .param("filterBy", "articleName")
+                        .param("page", "1")
+                        .param("size", "10"))
+                .andExpect(status().isOk());
     }
 
 }

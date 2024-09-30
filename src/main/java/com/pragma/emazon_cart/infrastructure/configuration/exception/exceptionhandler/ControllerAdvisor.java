@@ -2,12 +2,15 @@ package com.pragma.emazon_cart.infrastructure.configuration.exception.exceptionh
 
 
 import com.pragma.emazon_cart.domain.exceptions.ArticleAlreadyExistsInCartException;
+import com.pragma.emazon_cart.domain.exceptions.ArticleAmountMismatchException;
 import com.pragma.emazon_cart.domain.exceptions.ArticleNotFoundException;
 import com.pragma.emazon_cart.domain.exceptions.ArticleRestockDateNotFoundException;
 import com.pragma.emazon_cart.domain.exceptions.CategoryLimitExceededException;
 import com.pragma.emazon_cart.domain.exceptions.ErrorCommunicatingServerException;
+import com.pragma.emazon_cart.domain.exceptions.InvalidFilteringParameterException;
 import com.pragma.emazon_cart.domain.exceptions.InvalidInputException;
 import com.pragma.emazon_cart.domain.exceptions.JwtIsEmptyException;
+import com.pragma.emazon_cart.domain.exceptions.NoContentArticleException;
 import com.pragma.emazon_cart.domain.exceptions.OutOfStockException;
 import com.pragma.emazon_cart.domain.exceptions.ParsingToJsonException;
 import com.pragma.emazon_cart.domain.exceptions.ParsingToListException;
@@ -16,6 +19,7 @@ import com.pragma.emazon_cart.domain.exceptions.TransactionServiceUnavailableExc
 import com.pragma.emazon_cart.domain.exceptions.UnauthorizedException;
 import com.pragma.emazon_cart.domain.utils.Constants;
 import com.pragma.emazon_cart.infrastructure.configuration.exception.dto.Response;
+import jakarta.validation.ConstraintViolationException;
 import org.apache.coyote.BadRequestException;
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.http.HttpStatus;
@@ -24,6 +28,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.net.ConnectException;
@@ -42,6 +47,45 @@ public class ControllerAdvisor {
                         .message(articleNotFoundException.getMessage())
                         .build(),
                 HttpStatus.NOT_FOUND
+        );
+    }
+
+    @ExceptionHandler(ArticleAmountMismatchException.class)
+    public ResponseEntity<Response> handleArticleAmountMismatchException(
+            ArticleAmountMismatchException articleAmountMismatchException
+    ) {
+        return new ResponseEntity<>(
+                Response.builder()
+                        .statusCode(HttpStatus.NOT_FOUND)
+                        .message(articleAmountMismatchException.getMessage())
+                        .build(),
+                HttpStatus.NOT_FOUND
+        );
+    }
+
+    @ExceptionHandler(InvalidFilteringParameterException.class)
+    public ResponseEntity<Response> handleInvalidSortingParameterException(
+            InvalidFilteringParameterException invalidFilteringParameterException
+    ) {
+        return new ResponseEntity<>(
+                Response.builder()
+                        .statusCode(HttpStatus.BAD_REQUEST)
+                        .message(invalidFilteringParameterException.getMessage())
+                        .build(),
+                HttpStatus.BAD_REQUEST
+        );
+    }
+
+    @ExceptionHandler(NoContentArticleException.class)
+    public ResponseEntity<Response> handleNoContentArticleException(
+            NoContentArticleException noContentArticleException
+    ) {
+        return new ResponseEntity<>(
+                Response.builder()
+                        .statusCode(HttpStatus.NO_CONTENT)
+                        .message(Constants.ARTICLE_NO_CONTENT_MESSAGE)
+                        .build(),
+                HttpStatus.NO_CONTENT
         );
     }
 
@@ -261,11 +305,38 @@ public class ControllerAdvisor {
                 .map(MessageSourceResolvable::getDefaultMessage)
                 .toList();
 
-
         return new ResponseEntity<>(
                 Response.builder()
                         .statusCode(HttpStatus.BAD_REQUEST)
                         .message(errors.toString())
+                        .build(),
+                HttpStatus.BAD_REQUEST
+        );
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<Response> handleHttpMessageNotReadableException(
+            ConstraintViolationException httpConstraintViolationException
+    ) {
+        return new ResponseEntity<>(
+                Response.builder()
+                        .statusCode(HttpStatus.BAD_REQUEST)
+                        .message(Constants.INVALID_REQUEST_PARAMETERS_ERROR_RESPONSE
+                                + httpConstraintViolationException.getMessage())
+                        .build(),
+                HttpStatus.BAD_REQUEST
+        );
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<Response> handleHandlerMethodValidationException(
+            HandlerMethodValidationException handlerMethodValidationException
+    ) {
+        return new ResponseEntity<>(
+                Response.builder()
+                        .statusCode(HttpStatus.BAD_REQUEST)
+                        .message(Constants.VALIDATION_FAILURE_REQUEST_ERROR_RESPONSE
+                                + handlerMethodValidationException.getMessage())
                         .build(),
                 HttpStatus.BAD_REQUEST
         );
